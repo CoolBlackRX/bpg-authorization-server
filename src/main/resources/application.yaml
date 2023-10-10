@@ -1,0 +1,36 @@
+server:
+  port: 9001
+  servlet:
+    context-path: /api/auth
+spring:
+  application:
+    name: bpg-auth
+  datasource:
+    url: jdbc:mysql://10.10.36.248:3306/test_authorization_server?characterEncoding=UTF-8&serverTimezone=GMT%2B8&autoReconnect=true&failOverReadOnly=false&zeroDateTimeBehavior=convertToNull&useSSL=false&allowMultiQueries=true&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: xxzx@1234
+  cloud:
+    nacos:
+      username: nacos
+      password: nacos
+      discovery:
+        server-addr: 10.10.36.248:8848
+        namespace: 867085f0-760b-4a1e-8b9c-48c8de3195f7
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://127.0.0.1:${server.port}/api/auth
+  redis:
+    host: 10.10.36.246
+    port: 6379
+    password:
+    database: 6
+    timeout: 5000ms
+    jedis:
+      pool:
+        max-active: 100
+        max-wait: -1ms
+        max-idle: 8
+        min-idle: 0
