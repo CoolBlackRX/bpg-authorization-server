@@ -3,6 +3,7 @@ package com.bpg.authorization.server.configuration.handlers;
 import com.bpg.authorization.server.support.RespBean;
 import com.bpg.authorization.server.support.SuccessCode;
 import com.bpg.authorization.server.util.ToolUtil;
+import com.bpg.common.exception.BizException;
 import com.bpg.spring.boot.security.model.AgileUserDetail;
 import com.google.common.collect.Sets;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,8 @@ import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthorizationCode;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
+import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.authentication.*;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
@@ -68,8 +71,9 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
         builder.consent(false);
         builder.scopes(Sets.newHashSet("all"));
         // 授权码重定向地址
-        builder.redirectUri("http://testagile.bpgroup.com.cn");
-        builder.authorizationUri("http://testagile.bpgroup.com.cn");
+        String redirectUri = registeredClient.getRedirectUris().stream().findFirst().orElseThrow(() -> new BizException("客户端配置错误"));
+        builder.redirectUri(redirectUri);
+        builder.authorizationUri(redirectUri);
         OAuth2AuthorizationCodeRequestAuthenticationToken oAuth2AuthorizationCodeRequestAuthenticationToken = builder.build();
         ProviderContextHolder.setProviderContext(new ProviderContext(providerSettings, null));
         // 授权码

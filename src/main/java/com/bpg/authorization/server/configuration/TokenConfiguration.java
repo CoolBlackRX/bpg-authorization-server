@@ -128,10 +128,10 @@ public class TokenConfiguration {
 
     @Bean
     public OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator(JwtEncoder jwtEncoder) {
-//        OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
-//        OAuth2RefreshTokenGenerator refreshTokenGenerator = new OAuth2RefreshTokenGenerator();
-//        return new DelegatingOAuth2TokenGenerator(accessTokenGenerator, refreshTokenGenerator, new JwtGenerator(jwtEncoder));
-        return new JwtGenerator(jwtEncoder);
+        OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
+        OAuth2RefreshTokenGenerator refreshTokenGenerator = new OAuth2RefreshTokenGenerator();
+        // jwt token放前面
+        return new DelegatingOAuth2TokenGenerator(new JwtGenerator(jwtEncoder), accessTokenGenerator, refreshTokenGenerator);
     }
 
     /**
@@ -169,7 +169,9 @@ public class TokenConfiguration {
 
     @Bean
     public ProviderSettings providerSettings() {
-        return ProviderSettings.builder().build();
+        return ProviderSettings.builder()
+                .issuer("http://10.10.52.90:9001")
+                .build();
     }
 
 }

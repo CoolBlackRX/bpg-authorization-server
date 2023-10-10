@@ -46,7 +46,8 @@ public class AuthorizationServerConfiguration {
         // 登录
         httpSecurity.formLogin()
                 .loginPage("/login")
-                .successHandler(authenticationSuccessHandler);
+                .successHandler(authenticationSuccessHandler)
+        ;
         // 注册登录过滤器，支持json参数登录
         httpSecurity.addFilterAt(new UserAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
