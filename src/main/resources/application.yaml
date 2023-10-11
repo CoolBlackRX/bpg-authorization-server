@@ -17,9 +17,17 @@ spring:
       discovery:
         server-addr: 10.10.36.248:8848
         namespace: 867085f0-760b-4a1e-8b9c-48c8de3195f7
+      config:
+        server-addr: 10.10.36.248:8848
+        namespace: 867085f0-760b-4a1e-8b9c-48c8de3195f7
+        file-extension: yaml
+  config:
+    import:
+      - nacos:authorization-server-db-es-config.properties
+
   security:
     oauth2:
-      resourceserver:
+      resource-server:
         jwt:
           issuer-uri: http://127.0.0.1:${server.port}/api/auth
   redis:

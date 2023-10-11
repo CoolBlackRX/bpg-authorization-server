@@ -61,8 +61,8 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
         agileUserDetail.setInterfaceAuthCodeList(null);
         RespBean success = RespBean.success(SuccessCode.LOGIN_SUCCESS, agileUserDetail);
         log.info("用户：{} 登录", agileUserDetail.getEmployeeName());
-
-        RegisteredClient registeredClient = registeredClientRepository.findByClientId("micro-client");
+        String clientId = LoginHandlerUtil.getClientId(req, resp);
+        RegisteredClient registeredClient = registeredClientRepository.findByClientId(clientId);
         Assert.notNull(registeredClient, "非法ClientId");
 
         OAuth2AuthorizationCodeRequestAuthenticationToken.Builder builder =

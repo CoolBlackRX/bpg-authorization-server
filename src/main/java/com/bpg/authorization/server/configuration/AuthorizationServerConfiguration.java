@@ -1,8 +1,11 @@
 package com.bpg.authorization.server.configuration;
 
 import cn.hutool.extra.spring.SpringUtil;
+import cn.hutool.http.Header;
 import com.bpg.authorization.server.configuration.filters.UserAuthenticationFilter;
+import com.bpg.authorization.server.configuration.oauth2.Oauth2ClientLoginConfiguration;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -16,9 +19,17 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -29,8 +40,12 @@ import java.util.List;
 @EnableWebSecurity(debug = true)
 @RequiredArgsConstructor
 @Import(SpringUtil.class)
+@EnableConfigurationProperties(Oauth2ClientLoginConfiguration.class)
 public class AuthorizationServerConfiguration {
-    private final AuthenticationSuccessHandler authenticationSuccessHandler;
+    private final AuthenticationSuccessHandler compositeAuthenticationSuccessHandler;
+    private final AuthenticationFailureHandler compositeAuthenticationFailureHandler;
+    private final LogoutSuccessHandler compositeLogoutSuccessHandler;
+    private final LogoutHandler customerLogoutHandler;
 
     @Bean
     public SecurityFilterChain httpSecurityFilterChain(HttpSecurity httpSecurity,
@@ -46,8 +61,14 @@ public class AuthorizationServerConfiguration {
         // 登录
         httpSecurity.formLogin()
                 .loginPage("/login")
-                .successHandler(authenticationSuccessHandler)
-        ;
+                .successHandler(compositeAuthenticationSuccessHandler)
+                .failureHandler(compositeAuthenticationFailureHandler);
+        httpSecurity.logout()
+                .logoutUrl("/logout")
+                .addLogoutHandler(customerLogoutHandler)
+                .logoutSuccessHandler(compositeLogoutSuccessHandler)
+                .clearAuthentication(true);
+        httpSecurity.cors();
         // 注册登录过滤器，支持json参数登录
         httpSecurity.addFilterAt(new UserAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
@@ -83,5 +104,16 @@ public class AuthorizationServerConfiguration {
         return daoAuthenticationProvider;
     }
 
-
+    @Bean
+    protected CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Collections.singletonList("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "HEAD", "PUT", "OPTION", "DELETE"));
+        configuration.setAllowedHeaders(Collections.singletonList("*"));
+        configuration.addExposedHeader(Header.AUTHORIZATION.getValue());
+        configuration.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
 }
