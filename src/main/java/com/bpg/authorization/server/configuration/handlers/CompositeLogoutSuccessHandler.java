@@ -28,7 +28,6 @@ public class CompositeLogoutSuccessHandler implements LogoutSuccessHandler {
         RespBean success = RespBean.success(SuccessCode.LOGOUT_SUCCESS);
         ToolUtil.respBean(response, success);
     };
-
     private final LogoutSuccessHandler simpleUrlLogoutSuccessHandler = new SimpleUrlLogoutSuccessHandler();
 
     @Override

@@ -1,25 +1,30 @@
 package com.bpg.authorization.server.configuration.handlers;
 
+import com.bpg.authorization.server.configuration.redis.Md5Generator;
+import com.bpg.authorization.server.configuration.redis.SpringMd5Generator;
 import com.bpg.authorization.server.support.RespBean;
 import com.bpg.authorization.server.support.SuccessCode;
 import com.bpg.authorization.server.util.ToolUtil;
 import com.bpg.common.exception.BizException;
+import com.bpg.spring.boot.security.entity.Md5TokenHolder;
+import com.bpg.spring.boot.security.entity.TokenHolder;
 import com.bpg.spring.boot.security.model.AgileUserDetail;
+import com.bpg.spring.boot.security.store.CustomerTokenStore;
 import com.google.common.collect.Sets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.el.parser.Token;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthorizationCode;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
-import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.authentication.*;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.ProviderSettings;
+import org.springframework.security.oauth2.server.authorization.config.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.context.ProviderContext;
 import org.springframework.security.oauth2.server.authorization.context.ProviderContextHolder;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -28,6 +33,8 @@ import org.springframework.util.Assert;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.time.Duration;
+import java.util.Map;
 
 /**
  * 该类当登陆成功时，在这里返回登陆成功的信息
@@ -43,7 +50,7 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
     private final OAuth2AuthorizationCodeAuthenticationProvider oAuth2AuthorizationCodeAuthenticationProvider;
     private final RegisteredClientRepository registeredClientRepository;
     private final ProviderSettings providerSettings;
-
+    private final CustomerTokenStore customerTokenStore;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest req, HttpServletResponse resp, Authentication auth) {
@@ -60,6 +67,8 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
         agileUserDetail.setIsEnable(null);
         agileUserDetail.setInterfaceAuthCodeList(null);
         RespBean success = RespBean.success(SuccessCode.LOGIN_SUCCESS, agileUserDetail);
+
+
         log.info("用户：{} 登录", agileUserDetail.getEmployeeName());
         String clientId = LoginHandlerUtil.getClientId(req, resp);
         RegisteredClient registeredClient = registeredClientRepository.findByClientId(clientId);
@@ -90,10 +99,20 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
         Authentication tokenAuthentication = oAuth2AuthorizationCodeAuthenticationProvider.authenticate(oAuth2AuthorizationCodeAuthenticationToken);
         OAuth2AccessTokenAuthenticationToken oAuth2AccessTokenAuthenticationToken = (OAuth2AccessTokenAuthenticationToken) tokenAuthentication;
         OAuth2AccessToken accessToken = oAuth2AccessTokenAuthenticationToken.getAccessToken();
-        success.setToken(accessToken.getTokenValue());
         OAuth2RefreshToken refreshToken = oAuth2AccessTokenAuthenticationToken.getRefreshToken();
         Assert.notNull(refreshToken, "refresh_token生成失败");
-        success.setRefreshToken(refreshToken.getTokenValue());
+
+        // token md5化之后 存储到redis,并设置过期时间
+        TokenHolder tokenHolder = TokenHolder.of(accessToken.getTokenValue(), refreshToken.getTokenValue());
+        TokenSettings tokenSettings = registeredClient.getTokenSettings();
+        Duration accessTokenTimeToLive = tokenSettings.getAccessTokenTimeToLive();
+        long accessTokenStoreSeconds = accessTokenTimeToLive.getSeconds();
+        Duration refreshTokenTimeToLive = tokenSettings.getRefreshTokenTimeToLive();
+        long refreshTokenStoreSeconds = refreshTokenTimeToLive.getSeconds();
+
+        Md5TokenHolder md5TokenHolder = customerTokenStore.save(tokenHolder, accessTokenStoreSeconds, refreshTokenStoreSeconds);
+        success.setToken(md5TokenHolder.getAccessToken());
+        success.setRefreshToken(md5TokenHolder.getRefreshToken());
         ToolUtil.respBean(resp, success);
     }
 }

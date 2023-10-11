@@ -42,3 +42,9 @@ spring:
         max-wait: -1ms
         max-idle: 8
         min-idle: 0
+bpg:
+  aes-encode:
+    key: bN!gDVTirKfMuq~DvBmAo%A@4g7i$lMT
+  weblogaspect:
+    pointcut:
+      value: execution(public * com.bpg.authorization.server.controller..*.*(..))

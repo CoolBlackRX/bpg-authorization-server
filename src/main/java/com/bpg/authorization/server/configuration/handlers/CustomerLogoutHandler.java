@@ -1,6 +1,12 @@
 package com.bpg.authorization.server.configuration.handlers;
 
 
+import cn.hutool.core.util.ObjectUtil;
+import com.bpg.common.exception.BizException;
+import com.bpg.spring.boot.constant.GlobalConstant;
+import com.bpg.spring.boot.security.entity.Md5TokenHolder;
+import com.bpg.spring.boot.security.entity.TokenHolder;
+import com.bpg.spring.boot.security.store.CustomerTokenStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -26,23 +32,38 @@ import javax.servlet.http.HttpServletResponse;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class CustomerLogoutHandler implements LogoutHandler {
 
-    private final BearerTokenResolver bearerTokenResolver = new DefaultBearerTokenResolver();
+    private final DefaultBearerTokenResolver bearerAccessTokenResolver = new DefaultBearerTokenResolver();
+    private final DefaultBearerTokenResolver bearerRefreshTokenResolver = new DefaultBearerTokenResolver();
+
     private final OAuth2AuthorizationService oAuth2AuthorizationService;
+    private final CustomerTokenStore customerTokenStore;
+
+    public CustomerLogoutHandler(CustomerTokenStore customerTokenStore, OAuth2AuthorizationService oAuth2AuthorizationService) {
+        this.customerTokenStore = customerTokenStore;
+        this.oAuth2AuthorizationService = oAuth2AuthorizationService;
+        bearerRefreshTokenResolver.setBearerTokenHeaderName(GlobalConstant.REFRESH_TOKEN.getValue());
+    }
 
     @Override
     public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
-        String token = bearerTokenResolver.resolve(request);
-        Assert.notNull(token, "信息错误");
+        String accessToken = bearerAccessTokenResolver.resolve(request);
+        String refreshToken = bearerRefreshTokenResolver.resolve(request);
+        if (ObjectUtil.hasEmpty(accessToken, refreshToken)) {
+            throw new BizException("数据错误，推出失败");
+        }
 
-        OAuth2Authorization oAuth2Authorization = oAuth2AuthorizationService.findByToken(token, OAuth2TokenType.ACCESS_TOKEN);
+        Md5TokenHolder md5TokenHolder = Md5TokenHolder.of(accessToken, refreshToken);
+        TokenHolder tokenHolder = customerTokenStore.find(md5TokenHolder);
+
+        OAuth2Authorization oAuth2Authorization = oAuth2AuthorizationService.findByToken(tokenHolder.getAccessToken(), OAuth2TokenType.ACCESS_TOKEN);
         // 可能手动直接删除数据库内的token,不影响用户退出
         if (oAuth2Authorization == null) {
             return;
         }
         oAuth2AuthorizationService.remove(oAuth2Authorization);
+        customerTokenStore.remove(md5TokenHolder);
         log.info("用户：{} 退出系统", oAuth2Authorization.getPrincipalName());
     }
 }

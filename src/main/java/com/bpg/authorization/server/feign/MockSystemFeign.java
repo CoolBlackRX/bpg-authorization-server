@@ -18,7 +18,7 @@ public class MockSystemFeign implements SystemFeign {
         agileUserDetail.setUserId(95);
         agileUserDetail.setEmployeeName("赵汉青1111111");
         agileUserDetail.setUserName("zhaohq");
-        agileUserDetail.setPassword("{bcrypt}$2a$10$PfqZRh.tJxyXo0ddtg28UOVgxhemvrgJlZIYpChNjYLkBQZpH0nty");
+        agileUserDetail.setPassword("$2a$10$PfqZRh.tJxyXo0ddtg28UOVgxhemvrgJlZIYpChNjYLkBQZpH0nty");
         agileUserDetail.setRoles(Collections.emptyList());
 
         agileUserDetail.setIsLocked("N");
@@ -30,6 +30,6 @@ public class MockSystemFeign implements SystemFeign {
 
     @Override
     public ApiResult<Boolean> checkLdapUserPassword(String username, String password) {
-        return null;
+        return new ApiResult<>(true);
     }
 }

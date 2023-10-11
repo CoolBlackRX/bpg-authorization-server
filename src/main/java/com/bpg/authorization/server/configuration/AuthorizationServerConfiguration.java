@@ -3,7 +3,10 @@ package com.bpg.authorization.server.configuration;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.hutool.http.Header;
 import com.bpg.authorization.server.configuration.filters.UserAuthenticationFilter;
+import com.bpg.authorization.server.configuration.nacos.BpgLdapAuthProperties;
 import com.bpg.authorization.server.configuration.oauth2.Oauth2ClientLoginConfiguration;
+import com.bpg.authorization.server.configuration.providers.CompositeCustomerAuthenticationProvider;
+import com.bpg.authorization.server.feign.SystemFeign;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -37,7 +40,7 @@ import java.util.List;
  * @date 2023/9/1
  **/
 @Configuration
-@EnableWebSecurity(debug = true)
+@EnableWebSecurity
 @RequiredArgsConstructor
 @Import(SpringUtil.class)
 @EnableConfigurationProperties(Oauth2ClientLoginConfiguration.class)
@@ -69,11 +72,10 @@ public class AuthorizationServerConfiguration {
                 .logoutSuccessHandler(compositeLogoutSuccessHandler)
                 .clearAuthentication(true);
         httpSecurity.cors();
-        // 注册登录过滤器，支持json参数登录
+        // 注册登录过滤器，支持json参数登录读取
         httpSecurity.addFilterAt(new UserAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
-        // 登录认证
-        // 账号密码
+        // 账号密码认证校验
         AuthenticationManagerBuilder authenticationManagerBuilder = httpSecurity.getSharedObject(AuthenticationManagerBuilder.class);
         for (AuthenticationProvider provider : providers) {
             authenticationManagerBuilder.authenticationProvider(provider);
@@ -92,16 +94,22 @@ public class AuthorizationServerConfiguration {
      * 后续支持 ldap 认证，但是返回的是 agile 平台的用户信息
      * 尝试添加 LdapAuthenticationProvider
      * 注意： ProviderManager 验证时 单个 provider 验证通过就不再处理后续的 provider, 注意验证优先级
+     * <p>
+     * 同时支持ldap和密码认证登录，域账号内存在用户就直接登录，不验证密码
      *
      * @param userDetailsService 用户信息获取类
      * @return DaoAuthenticationProvider
      */
     @Bean
-    public DaoAuthenticationProvider customerLoginAuthProvider(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
-        DaoAuthenticationProvider daoAuthenticationProvider = new DaoAuthenticationProvider();
-        daoAuthenticationProvider.setPasswordEncoder(passwordEncoder);
-        daoAuthenticationProvider.setUserDetailsService(userDetailsService);
-        return daoAuthenticationProvider;
+    public DaoAuthenticationProvider customerLoginAuthProvider(SystemFeign systemFeign,
+                                                               BpgLdapAuthProperties bpgLdapAuthProperties,
+                                                               UserDetailsService userDetailsService,
+                                                               PasswordEncoder passwordEncoder) {
+        CompositeCustomerAuthenticationProvider compositeCustomerAuthenticationProvider =
+                new CompositeCustomerAuthenticationProvider(systemFeign, bpgLdapAuthProperties);
+        compositeCustomerAuthenticationProvider.setPasswordEncoder(passwordEncoder);
+        compositeCustomerAuthenticationProvider.setUserDetailsService(userDetailsService);
+        return compositeCustomerAuthenticationProvider;
     }
 
     @Bean
