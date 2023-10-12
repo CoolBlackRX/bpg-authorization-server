@@ -1,6 +1,10 @@
 package com.bpg.authorization.server.configuration;
 
+import com.bpg.authorization.server.configuration.jackson.*;
 import com.bpg.authorization.server.configuration.jwk.Jwks;
+import com.bpg.spring.boot.security.model.*;
+import com.fasterxml.jackson.databind.Module;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -10,12 +14,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.lob.DefaultLobHandler;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
+import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.core.OAuth2TokenFormat;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
@@ -33,9 +41,11 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.config.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.config.ProviderSettings;
 import org.springframework.security.oauth2.server.authorization.config.TokenSettings;
+import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
 import org.springframework.security.oauth2.server.authorization.token.*;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * @author zhaohq
@@ -90,7 +100,26 @@ public class TokenConfiguration {
      */
     @Bean
     public OAuth2AuthorizationService oAuth2AuthorizationService(RegisteredClientRepository registeredClientRepository) {
-        return new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
+        JdbcOAuth2AuthorizationService oAuth2AuthorizationService = new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
+        JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper authorizationRowMapper = new JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper(
+                registeredClientRepository);
+        authorizationRowMapper.setLobHandler(new DefaultLobHandler());
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        ClassLoader classLoader = JdbcOAuth2AuthorizationService.class.getClassLoader();
+        List<Module> securityModules = SecurityJackson2Modules.getModules(classLoader);
+        objectMapper.registerModules(securityModules);
+        objectMapper.registerModule(new OAuth2AuthorizationServerJackson2Module());
+        objectMapper.addMixIn(SysSystem.class, SysSystemMixin.class);
+        objectMapper.addMixIn(SysRole.class, SysRoleMixin.class);
+        objectMapper.addMixIn(SysUserCompany.class, SysUserCompanyMixin.class);
+        objectMapper.addMixIn(UserCompanyContainer.Organization.class, UserCompanyContainerOrganizationMixin.class);
+        objectMapper.addMixIn(UserCompanyContainer.WorkShop.class, UserCompanyContainerWorkShopMixin.class);
+        authorizationRowMapper.setObjectMapper(objectMapper);
+
+        oAuth2AuthorizationService.setAuthorizationRowMapper(authorizationRowMapper);
+        return oAuth2AuthorizationService;
+
     }
 
     /**
@@ -121,17 +150,38 @@ public class TokenConfiguration {
         return new NimbusJwtEncoder(jwkSource);
     }
 
-//    @Bean
-//    public JwtGenerator jwtGenerator(JwtEncoder jwtEncoder) {
-//        return new JwtGenerator(jwtEncoder);
-//    }
 
     @Bean
-    public OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator(JwtEncoder jwtEncoder) {
+    public OAuth2TokenCustomizer<JwtEncodingContext> tokenCustomizer() {
+        return context -> {
+            UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = context.getPrincipal();
+            AgileUserDetail agileUserDetail = (AgileUserDetail) usernamePasswordAuthenticationToken.getPrincipal();
+            JwtClaimsSet.Builder claims = context.getClaims();
+            claims.claim("userId", agileUserDetail.getUserId());
+            claims.claim("userName", agileUserDetail.getUserName());
+            claims.claim("employeeId", "");
+            claims.claim("employeeCode", agileUserDetail.getEmployeeCode());
+            claims.claim("hasAdminRole", agileUserDetail.isHasAdminRole());
+            claims.claim("hasSuperAdminRole", agileUserDetail.isHasSuperAdminRole());
+            claims.claim("deptId", agileUserDetail.getDeptId());
+            claims.claim("currentDeptId", agileUserDetail.getCurrentDeptId());
+            claims.claim("erpBusinessEntityId", agileUserDetail.getErpBusinessEntityId());
+            claims.claim("departmentId", agileUserDetail.getDepartmentId());
+            claims.claim("erpDeptSeg", agileUserDetail.getErpDeptSeg());
+        };
+    }
+
+
+    @Bean
+    public OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator(JwtEncoder jwtEncoder,
+                                                                            OAuth2TokenCustomizer<JwtEncodingContext> tokenCustomizer) {
         OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
         OAuth2RefreshTokenGenerator refreshTokenGenerator = new OAuth2RefreshTokenGenerator();
         // jwt token放前面
-        return new DelegatingOAuth2TokenGenerator(new JwtGenerator(jwtEncoder), accessTokenGenerator, refreshTokenGenerator);
+        JwtGenerator jwtGenerator = new JwtGenerator(jwtEncoder);
+        // token 增强
+        jwtGenerator.setJwtCustomizer(tokenCustomizer);
+        return new DelegatingOAuth2TokenGenerator(jwtGenerator, accessTokenGenerator, refreshTokenGenerator);
     }
 
     /**

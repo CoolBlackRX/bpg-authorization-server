@@ -3,10 +3,13 @@ package com.bpg.authorization.server.configuration;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.hutool.http.Header;
 import com.bpg.authorization.server.configuration.filters.UserAuthenticationFilter;
+import com.bpg.authorization.server.configuration.handlers.CustomerMd5TokenConverter;
+import com.bpg.authorization.server.configuration.handlers.CustomerTokenEndpointSuccessHandler;
 import com.bpg.authorization.server.configuration.nacos.BpgLdapAuthProperties;
 import com.bpg.authorization.server.configuration.oauth2.Oauth2ClientLoginConfiguration;
 import com.bpg.authorization.server.configuration.providers.CompositeCustomerAuthenticationProvider;
 import com.bpg.authorization.server.feign.SystemFeign;
+import com.bpg.spring.boot.security.store.CustomerTokenStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +24,7 @@ import org.springframework.security.config.annotation.web.configurers.oauth2.ser
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -51,11 +55,25 @@ public class AuthorizationServerConfiguration {
     private final LogoutHandler customerLogoutHandler;
 
     @Bean
+    public CustomerTokenEndpointSuccessHandler customerTokenEndpointSuccessHandler(CustomerTokenStore customerTokenStore,
+                                                                                   CustomerMd5TokenConverter customerMd5TokenConverter,
+                                                                                   OAuth2AuthorizationService oAuth2AuthorizationService) {
+        return new CustomerTokenEndpointSuccessHandler(customerTokenStore, customerMd5TokenConverter, oAuth2AuthorizationService);
+    }
+
+
+    @Bean
     public SecurityFilterChain httpSecurityFilterChain(HttpSecurity httpSecurity,
                                                        // 身份验证
-                                                       List<AuthenticationProvider> providers) throws Exception {
+                                                       List<AuthenticationProvider> providers,
+                                                       CustomerTokenEndpointSuccessHandler customerTokenEndpointSuccessHandler) throws Exception {
         // 认证服务器配置,前后端分离，登陆页面在前端，没办法做授权登录重定向
         OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer<>();
+        authorizationServerConfigurer.tokenEndpoint(configurer -> {
+            // 获取 token 成功，返回md5 token
+            configurer.accessTokenResponseHandler(customerTokenEndpointSuccessHandler);
+        });
+
         httpSecurity.apply(authorizationServerConfigurer);
         // 关闭 session
         httpSecurity.sessionManagement().disable();
@@ -71,6 +89,7 @@ public class AuthorizationServerConfiguration {
                 .addLogoutHandler(customerLogoutHandler)
                 .logoutSuccessHandler(compositeLogoutSuccessHandler)
                 .clearAuthentication(true);
+
         httpSecurity.cors();
         // 注册登录过滤器，支持json参数登录读取
         httpSecurity.addFilterAt(new UserAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);

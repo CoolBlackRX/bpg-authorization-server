@@ -49,8 +49,12 @@ public class CompositeCustomerAuthenticationProvider extends DaoAuthenticationPr
                     "AbstractUserDetailsAuthenticationProvider.badCredentials",
                     "Bad credentials"));
         }
-        AgileUserDetail agileUserDetail = (AgileUserDetail) userDetails;
-        agileUserDetail.setPassword("{bcrypt}" + agileUserDetail.getPassword());
+        // 一体化使用的密码加密是  BCryptPasswordEncoder
+        // 如有接入其他的加密算法，切换填充相应的算法前缀即可
+        if (userDetails instanceof AgileUserDetail) {
+            AgileUserDetail agileUserDetail = (AgileUserDetail) userDetails;
+            agileUserDetail.setPassword("{bcrypt}" + agileUserDetail.getPassword());
+        }
         String presentedPassword = authentication.getCredentials().toString();
         if (BooleanUtil.toBoolean(bpgLdapAuthProperties.getEnableLdap())) {
             if (!getIgnoreLdapAuthUsers().contains(authentication.getPrincipal().toString().trim())) {

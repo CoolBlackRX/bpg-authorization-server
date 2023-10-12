@@ -50,7 +50,7 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
     private final OAuth2AuthorizationCodeAuthenticationProvider oAuth2AuthorizationCodeAuthenticationProvider;
     private final RegisteredClientRepository registeredClientRepository;
     private final ProviderSettings providerSettings;
-    private final CustomerTokenStore customerTokenStore;
+    private final CustomerMd5TokenConverter customerMd5TokenConverter;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest req, HttpServletResponse resp, Authentication auth) {
@@ -104,13 +104,7 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
 
         // token md5化之后 存储到redis,并设置过期时间
         TokenHolder tokenHolder = TokenHolder.of(accessToken.getTokenValue(), refreshToken.getTokenValue());
-        TokenSettings tokenSettings = registeredClient.getTokenSettings();
-        Duration accessTokenTimeToLive = tokenSettings.getAccessTokenTimeToLive();
-        long accessTokenStoreSeconds = accessTokenTimeToLive.getSeconds();
-        Duration refreshTokenTimeToLive = tokenSettings.getRefreshTokenTimeToLive();
-        long refreshTokenStoreSeconds = refreshTokenTimeToLive.getSeconds();
-
-        Md5TokenHolder md5TokenHolder = customerTokenStore.save(tokenHolder, accessTokenStoreSeconds, refreshTokenStoreSeconds);
+        Md5TokenHolder md5TokenHolder = customerMd5TokenConverter.apply(registeredClient, tokenHolder);
         success.setToken(md5TokenHolder.getAccessToken());
         success.setRefreshToken(md5TokenHolder.getRefreshToken());
         ToolUtil.respBean(resp, success);

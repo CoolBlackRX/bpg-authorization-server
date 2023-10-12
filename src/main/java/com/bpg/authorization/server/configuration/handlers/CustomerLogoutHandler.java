@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjectUtil;
 import com.bpg.common.exception.BizException;
 import com.bpg.spring.boot.constant.GlobalConstant;
 import com.bpg.spring.boot.security.entity.Md5TokenHolder;
+import com.bpg.spring.boot.security.entity.TokenContainer;
 import com.bpg.spring.boot.security.entity.TokenHolder;
 import com.bpg.spring.boot.security.store.CustomerTokenStore;
 import lombok.RequiredArgsConstructor;
@@ -55,15 +56,15 @@ public class CustomerLogoutHandler implements LogoutHandler {
         }
 
         Md5TokenHolder md5TokenHolder = Md5TokenHolder.of(accessToken, refreshToken);
-        TokenHolder tokenHolder = customerTokenStore.find(md5TokenHolder);
-
+        TokenContainer tokenContainer = customerTokenStore.find(md5TokenHolder);
+        TokenHolder tokenHolder = tokenContainer.getJwtToken();
         OAuth2Authorization oAuth2Authorization = oAuth2AuthorizationService.findByToken(tokenHolder.getAccessToken(), OAuth2TokenType.ACCESS_TOKEN);
         // 可能手动直接删除数据库内的token,不影响用户退出
         if (oAuth2Authorization == null) {
             return;
         }
         oAuth2AuthorizationService.remove(oAuth2Authorization);
-        customerTokenStore.remove(md5TokenHolder);
+        customerTokenStore.remove(tokenContainer);
         log.info("用户：{} 退出系统", oAuth2Authorization.getPrincipalName());
     }
 }
