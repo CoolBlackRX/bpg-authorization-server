@@ -132,6 +132,10 @@ public class TokenConfiguration {
 
     /**
      * 默认发放令牌
+     *
+     * todo
+     * JWKSource 共享, 动态生成签名密钥，多实例部署要共享签名
+     * 还要设置签名过期，一个月之类的
      */
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
@@ -224,6 +228,9 @@ public class TokenConfiguration {
     @Bean
     public ProviderSettings providerSettings() {
         return ProviderSettings.builder()
+                // todo
+                // 颁发签证的url, 用域名替代
+                // 只是为了标志 jwt 的签名的来源
                 .issuer("http://10.10.52.90:9001")
                 .build();
     }
