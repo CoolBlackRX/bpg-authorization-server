@@ -1,8 +1,10 @@
 package com.bpg.authorization.server.configuration.handlers;
 
+import com.bpg.common.exception.BizException;
 import com.bpg.spring.boot.security.entity.Md5TokenHolder;
 import com.bpg.spring.boot.security.entity.TokenContainer;
 import com.bpg.spring.boot.security.entity.TokenHolder;
+import com.bpg.spring.boot.security.model.AgileUserDetail;
 import com.bpg.spring.boot.security.store.CustomerTokenStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -16,6 +18,7 @@ import org.springframework.security.oauth2.core.http.converter.OAuth2AccessToken
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AccessTokenAuthenticationToken;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2RefreshTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.web.authentication.DelegatingAuthenticationConverter;
@@ -58,15 +61,20 @@ public class CustomerTokenEndpointSuccessHandler implements AuthenticationSucces
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
-
+        String userName;
         // token 转成 md5 token, 并移除过期的 token 和 refresh_token , refresh_token reuse = false
         Authentication readAuthentication = authenticationConverter.convert(request);
         if (readAuthentication instanceof OAuth2RefreshTokenAuthenticationToken) {
             OAuth2RefreshTokenAuthenticationToken oAuth2RefreshTokenAuthenticationToken = (OAuth2RefreshTokenAuthenticationToken) readAuthentication;
             String refreshToken = oAuth2RefreshTokenAuthenticationToken.getRefreshToken();
-            TokenHolder jwtToken = TokenHolder.of(null, refreshToken);
+            TokenHolder jwtToken = TokenHolder.of(null, refreshToken, null);
             TokenContainer tokenContainer = customerTokenStore.findByJwtToken(jwtToken);
-            customerTokenStore.remove(tokenContainer);
+            OAuth2ClientAuthenticationToken oAuth2ClientAuthenticationToken = (OAuth2ClientAuthenticationToken) oAuth2RefreshTokenAuthenticationToken.getPrincipal();
+            customerTokenStore.remove(tokenContainer, tokenContainer.getUserName(), (String) oAuth2ClientAuthenticationToken.getPrincipal());
+            userName = tokenContainer.getUserName();
+        } else {
+            // 授权码获取用户名,授权码模式没时间搞
+            throw new BizException("不支持授权码模式获取token");
         }
         // 以下代码参照 OAuth2TokenEndpointFilter#sendAccessTokenResponse
         OAuth2AccessTokenAuthenticationToken accessTokenAuthentication =
@@ -74,11 +82,13 @@ public class CustomerTokenEndpointSuccessHandler implements AuthenticationSucces
         OAuth2AccessToken accessToken = accessTokenAuthentication.getAccessToken();
         OAuth2RefreshToken refreshToken = accessTokenAuthentication.getRefreshToken();
         Map<String, Object> additionalParameters = accessTokenAuthentication.getAdditionalParameters();
-
         // md5 处理 jwt token
         RegisteredClient registeredClient = accessTokenAuthentication.getRegisteredClient();
         Assert.notNull(refreshToken, "refreshToken 为空");
-        Md5TokenHolder md5TokenHolder = customerMd5TokenConverter.apply(registeredClient, TokenHolder.of(accessToken.getTokenValue(), refreshToken.getTokenValue()));
+        AgileUserDetail agileUserDetail = new AgileUserDetail();
+        agileUserDetail.setUsername(userName);
+        Md5TokenHolder md5TokenHolder = customerMd5TokenConverter.apply(agileUserDetail, registeredClient,
+                TokenHolder.of(accessToken.getTokenValue(), refreshToken.getTokenValue(), userName));
 
         OAuth2AccessTokenResponse.Builder builder =
                 OAuth2AccessTokenResponse.withToken(md5TokenHolder.getAccessToken())

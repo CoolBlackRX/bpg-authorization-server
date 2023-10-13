@@ -2,6 +2,7 @@ package com.bpg.authorization.server.configuration.handlers;
 
 import com.bpg.spring.boot.security.entity.Md5TokenHolder;
 import com.bpg.spring.boot.security.entity.TokenHolder;
+import com.bpg.spring.boot.security.model.AgileUserDetail;
 import com.bpg.spring.boot.security.store.CustomerTokenStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -17,17 +18,17 @@ import java.util.function.BiFunction;
  */
 @Component
 @RequiredArgsConstructor
-public class CustomerMd5TokenConverter implements BiFunction<RegisteredClient, TokenHolder, Md5TokenHolder> {
+public class CustomerMd5TokenConverter implements UserTokenConsumer<AgileUserDetail, RegisteredClient, TokenHolder, Md5TokenHolder> {
     private final CustomerTokenStore customerTokenStore;
 
     @Override
-    public Md5TokenHolder apply(RegisteredClient registeredClient, TokenHolder tokenHolder) {
+    public Md5TokenHolder apply(AgileUserDetail agileUserDetail, RegisteredClient registeredClient, TokenHolder tokenHolder) {
         // token md5化之后 存储到redis,并设置过期时间
         TokenSettings tokenSettings = registeredClient.getTokenSettings();
         Duration accessTokenTimeToLive = tokenSettings.getAccessTokenTimeToLive();
         long accessTokenStoreSeconds = accessTokenTimeToLive.getSeconds();
         Duration refreshTokenTimeToLive = tokenSettings.getRefreshTokenTimeToLive();
         long refreshTokenStoreSeconds = refreshTokenTimeToLive.getSeconds();
-        return customerTokenStore.save(tokenHolder, accessTokenStoreSeconds, refreshTokenStoreSeconds);
+        return customerTokenStore.save(agileUserDetail, registeredClient.getClientId(), tokenHolder, accessTokenStoreSeconds, refreshTokenStoreSeconds);
     }
 }

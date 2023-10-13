@@ -70,7 +70,7 @@ public class AuthorizationServerConfiguration {
         // 认证服务器配置,前后端分离，登陆页面在前端，没办法做授权登录重定向
         OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer<>();
         authorizationServerConfigurer.tokenEndpoint(configurer -> {
-            // 获取 token 成功，返回md5 token
+            // tokenEndpoint  授权码获取token、refresh_token 刷新token  获取 token 成功后，返回压缩后的 md5 token
             configurer.accessTokenResponseHandler(customerTokenEndpointSuccessHandler);
         });
 

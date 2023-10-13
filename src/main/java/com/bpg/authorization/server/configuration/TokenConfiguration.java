@@ -161,6 +161,7 @@ public class TokenConfiguration {
             claims.claim("userName", agileUserDetail.getUserName());
             claims.claim("employeeId", "");
             claims.claim("employeeCode", agileUserDetail.getEmployeeCode());
+            claims.claim("employeeName", agileUserDetail.getEmployeeName());
             claims.claim("hasAdminRole", agileUserDetail.isHasAdminRole());
             claims.claim("hasSuperAdminRole", agileUserDetail.isHasSuperAdminRole());
             claims.claim("deptId", agileUserDetail.getDeptId());
@@ -168,6 +169,9 @@ public class TokenConfiguration {
             claims.claim("erpBusinessEntityId", agileUserDetail.getErpBusinessEntityId());
             claims.claim("departmentId", agileUserDetail.getDepartmentId());
             claims.claim("erpDeptSeg", agileUserDetail.getErpDeptSeg());
+            claims.claim("userSystemId", agileUserDetail.getUserSystemId());
+            claims.claim("roles", agileUserDetail.getRoles());
+            claims.claim("interfaceAuthCodeList", agileUserDetail.getInterfaceAuthCodeList());
         };
     }
 

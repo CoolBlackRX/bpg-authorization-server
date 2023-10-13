@@ -1,5 +1,7 @@
 package com.bpg.authorization.server.configuration.handlers;
 
+import cn.hutool.core.util.ObjectUtil;
+import com.bpg.authorization.server.configuration.redis.CustomerRedisTokenStore;
 import com.bpg.authorization.server.configuration.redis.Md5Generator;
 import com.bpg.authorization.server.configuration.redis.SpringMd5Generator;
 import com.bpg.authorization.server.support.RespBean;
@@ -7,6 +9,7 @@ import com.bpg.authorization.server.support.SuccessCode;
 import com.bpg.authorization.server.util.ToolUtil;
 import com.bpg.common.exception.BizException;
 import com.bpg.spring.boot.security.entity.Md5TokenHolder;
+import com.bpg.spring.boot.security.entity.TokenContainer;
 import com.bpg.spring.boot.security.entity.TokenHolder;
 import com.bpg.spring.boot.security.model.AgileUserDetail;
 import com.bpg.spring.boot.security.store.CustomerTokenStore;
@@ -51,6 +54,7 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
     private final RegisteredClientRepository registeredClientRepository;
     private final ProviderSettings providerSettings;
     private final CustomerMd5TokenConverter customerMd5TokenConverter;
+    private final CustomerRedisTokenStore customerRedisTokenStore;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest req, HttpServletResponse resp, Authentication auth) {
@@ -68,11 +72,21 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
         agileUserDetail.setInterfaceAuthCodeList(null);
         RespBean success = RespBean.success(SuccessCode.LOGIN_SUCCESS, agileUserDetail);
 
-
+        // 模拟授权码流程获取 token
         log.info("用户：{} 登录", agileUserDetail.getEmployeeName());
         String clientId = LoginHandlerUtil.getClientId(req, resp);
         RegisteredClient registeredClient = registeredClientRepository.findByClientId(clientId);
         Assert.notNull(registeredClient, "非法ClientId");
+
+        TokenContainer tokenContainer = customerRedisTokenStore.findByUserName(agileUserDetail.getUserName(), registeredClient.getClientId());
+        // token 有效且存在，直接返回
+        if (ObjectUtil.isNotEmpty(tokenContainer)) {
+            Md5TokenHolder md5Token = tokenContainer.getMd5Token();
+            success.setToken(md5Token.getAccessToken());
+            success.setRefreshToken(md5Token.getRefreshToken());
+            ToolUtil.respBean(resp, success);
+            return;
+        }
 
         OAuth2AuthorizationCodeRequestAuthenticationToken.Builder builder =
                 OAuth2AuthorizationCodeRequestAuthenticationToken.with(registeredClient.getClientId(), auth);
@@ -103,8 +117,8 @@ public class LoginAuthenticationSuccessHandler implements AuthenticationSuccessH
         Assert.notNull(refreshToken, "refresh_token生成失败");
 
         // token md5化之后 存储到redis,并设置过期时间
-        TokenHolder tokenHolder = TokenHolder.of(accessToken.getTokenValue(), refreshToken.getTokenValue());
-        Md5TokenHolder md5TokenHolder = customerMd5TokenConverter.apply(registeredClient, tokenHolder);
+        TokenHolder tokenHolder = TokenHolder.of(accessToken.getTokenValue(), refreshToken.getTokenValue(), user.getUserName());
+        Md5TokenHolder md5TokenHolder = customerMd5TokenConverter.apply(user, registeredClient, tokenHolder);
         success.setToken(md5TokenHolder.getAccessToken());
         success.setRefreshToken(md5TokenHolder.getRefreshToken());
         ToolUtil.respBean(resp, success);

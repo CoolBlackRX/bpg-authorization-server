@@ -7,18 +7,17 @@ import com.bpg.spring.boot.constant.GlobalConstant;
 import com.bpg.spring.boot.security.entity.Md5TokenHolder;
 import com.bpg.spring.boot.security.entity.TokenContainer;
 import com.bpg.spring.boot.security.entity.TokenHolder;
+import com.bpg.spring.boot.security.model.AgileUserDetail;
 import com.bpg.spring.boot.security.store.CustomerTokenStore;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.util.Assert;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -55,7 +54,7 @@ public class CustomerLogoutHandler implements LogoutHandler {
             throw new BizException("数据错误，推出失败");
         }
 
-        Md5TokenHolder md5TokenHolder = Md5TokenHolder.of(accessToken, refreshToken);
+        Md5TokenHolder md5TokenHolder = Md5TokenHolder.of(accessToken, refreshToken,null);
         TokenContainer tokenContainer = customerTokenStore.find(md5TokenHolder);
         TokenHolder tokenHolder = tokenContainer.getJwtToken();
         OAuth2Authorization oAuth2Authorization = oAuth2AuthorizationService.findByToken(tokenHolder.getAccessToken(), OAuth2TokenType.ACCESS_TOKEN);
@@ -63,8 +62,11 @@ public class CustomerLogoutHandler implements LogoutHandler {
         if (oAuth2Authorization == null) {
             return;
         }
+        String clientId = LoginHandlerUtil.getClientId(request, response);
+        UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = (UsernamePasswordAuthenticationToken) authentication;
+        AgileUserDetail agileUserDetail = (AgileUserDetail) usernamePasswordAuthenticationToken.getPrincipal();
         oAuth2AuthorizationService.remove(oAuth2Authorization);
-        customerTokenStore.remove(tokenContainer);
+        customerTokenStore.remove(tokenContainer, agileUserDetail.getUserName(), clientId);
         log.info("用户：{} 退出系统", oAuth2Authorization.getPrincipalName());
     }
 }
